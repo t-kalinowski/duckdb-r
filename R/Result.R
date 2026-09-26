@@ -8,8 +8,7 @@
 #'   types, ...).
 #' @slot env environment holding the result's mutable fetch state.
 #' @slot arrow whether the result is fetched via Arrow.
-#' @slot query_result external pointer to the underlying materialized query
-#'   result.
+#' @slot query_result external pointer to the underlying materialized query result.
 #' @aliases duckdb_result
 #' @keywords internal
 #' @export
@@ -136,6 +135,8 @@ duckdb_post_execute <- function(res, out) {
     out <- tz_force(out, res@connection@convert_opts$timezone_out)
   }
 
+  # The whole result is stored here, whatever dbFetch() later asks for:
+  # handbook/usage/memory/reading/README.md, #1997, #2587.
   res@env$resultset <- out
 
   out

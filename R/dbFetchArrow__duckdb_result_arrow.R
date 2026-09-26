@@ -1,7 +1,7 @@
+# Handbook: handbook/usage/memory/reading/README.md (what a batch holds, and what frees it)
 #' @rdname duckdb_result_arrow-class
 #' @inheritParams DBI::dbFetchArrow
-#' @param chunk_size The chunk size in rows used when pulling Arrow batches
-#'   from DuckDB.
+#' @param chunk_size The chunk size in rows used when pulling Arrow batches from DuckDB.
 #' @usage NULL
 dbFetchArrow__duckdb_result_arrow <- function(res, ..., chunk_size = 1000000) {
   if (!res@env$open) {
@@ -30,8 +30,7 @@ dbFetchArrow__duckdb_result_arrow <- function(res, ..., chunk_size = 1000000) {
     return(stream)
   }
 
-  # Multi-execution: drain every per-row query result into chunks and emit a
-  # single basic_array_stream so callers see one unified stream.
+  # Multi-execution: drain every per-row query result into chunks and emit a single basic_array_stream so callers see one unified stream.
   arrays <- list()
   repeat {
     chunk <- dbFetchArrowChunk(res, chunk_size = chunk_size)
@@ -61,6 +60,26 @@ setMethod(
 #' @rdname duckdb_result_arrow-class
 #' @inheritParams DBI::dbFetchArrowChunk
 #' @usage NULL
+#' @section Releasing a batch:
+#' Each batch that `dbFetchArrowChunk()` returns is a `nanoarrow_array`
+#' whose buffers live outside R's heap, allocated by the engine.
+#' They are freed by the batch's release callback, which runs in one of two ways.
+#' `nanoarrow::nanoarrow_pointer_release()` runs it at once,
+#' whatever else still refers to the batch, and gives the most control:
+#' a loop that converts each batch and releases it holds one batch at a time,
+#' however large the result.
+#' Dropping the batch instead leaves the callback to R's garbage collector,
+#' which runs on R's own allocations and never sees these buffers,
+#' so batches accumulate until a collection happens;
+#' `gc()` is the fallback that forces one,
+#' and it frees a batch only if nothing refers to it any more.
+#'
+#' Converting a batch with `as.data.frame()` copies numeric columns,
+#' but character columns are converted lazily
+#' and keep their part of the batch alive until they are materialized or dropped,
+#' whichever way the batch itself was released.
+#' Releasing a batch never affects the result it came from;
+#' the next `dbFetchArrowChunk()` proceeds as before.
 dbFetchArrowChunk__duckdb_result_arrow <- function(
   res,
   ...,
@@ -132,9 +151,8 @@ require_nanoarrow <- function(what) {
 empty_arrow_chunk <- function(res) {
   schema <- res@env$arrow_schema
   if (is.null(schema)) {
-    # No chunk has ever been fetched (e.g. dbBindArrow() with a zero-length
-    # stream). Fall back to an empty no-column array; downstream code that
-    # only inspects `chunk$length` is unaffected.
+    # No chunk has ever been fetched (e.g. dbBindArrow() with a zero-length stream).
+    # Fall back to an empty no-column array; downstream code that only inspects `chunk$length` is unaffected.
     return(nanoarrow::as_nanoarrow_array(data.frame()))
   }
   ptype <- nanoarrow::infer_nanoarrow_ptype(schema)
