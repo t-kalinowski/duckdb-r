@@ -76,6 +76,27 @@ duckdb_execute_arrow <- function(res) {
   )
 }
 
+# Every method on a result, of either class, asks this first.
+# A result is open from `dbSendQuery()` until `dbClearResult()`,
+# and closing its connection closes it too:
+# `dbDisconnect()` releases the prepared statement and any stream still
+# open on the connection, so that nothing of the connection outlives it
+# (handbook/architecture/glue/objects/README.md).
+# The two ends are told apart, because a cleared result is the caller's own
+# doing, and a closed connection may not be.
+check_result_open <- function(res, call = parent.frame()) {
+  if (!res@env$open) {
+    abort("result has already been cleared", call = call)
+  }
+  if (!dbIsValid(res@connection)) {
+    abort(
+      "The connection this result was sent on has been closed.",
+      call = call
+    )
+  }
+  invisible(res)
+}
+
 duckdb_result <- function(connection, stmt_lst, arrow) {
   env <- new.env(parent = emptyenv())
   env$rows_fetched <- 0

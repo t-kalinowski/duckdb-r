@@ -71,7 +71,8 @@ Read on the vendored tree, and measured in the experiment above where a number i
    The private context is a member of `RQueryResult`, and of `RStatement` for the `dbFetch()` route;
    it dies with `dbClearResult()` or with the result's finalizer.
    The engine's `ConnectionManager` counts it, so the instance-cache patch reports it as a connection.
-   `dbDisconnect()` does not reach it, which is the leaf's separate fact about results and their connections.
+   `dbDisconnect()` closes it with the result, as it closes every result open on the connection,
+   which is the leaf's fact about results and their connections.
 4. **Interrupts and progress.**
    `ScopedInterruptHandler` takes the context it is given, and the progress display comes with the copied config.
 5. **A switch.**
@@ -108,8 +109,6 @@ Read on the vendored tree, and measured in the experiment above where a number i
 
 ## Open questions
 
-* Whether `dbDisconnect()` should close the private contexts, and the results, it knows of,
-  which is the same question as an uncleared result keeping an instance alive past its connection.
 * Whether the pump of [`PLAN-streaming-thread.md`](PLAN-streaming-thread.md) makes the private context
   a requirement of a pumped result rather than a guarded choice:
   a pumped result on the connection's context would hold the context's lock between fetches

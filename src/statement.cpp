@@ -24,13 +24,24 @@ using namespace cpp11::literals;
 	}
 }
 
-static cpp11::list construct_retlist(duckdb::unique_ptr<PreparedStatement> stmt, const string &query, idx_t n_param,
-                                     SEXP registered_dfs = R_NilValue) {
+// A released pointer is one dbClearResult() has been through; a statement without its prepared statement is one
+// whose connection has closed, which closed the result with it (ConnWrapper::~ConnWrapper()).
+static void CheckStatement(const duckdb::stmt_eptr_t &stmt, const char *context) {
+	if (!stmt || !stmt.get()) {
+		rapi_error_with_context(context, "Invalid statement");
+	}
+	if (!stmt->stmt) {
+		rapi_error_with_context(context, "The connection this result was sent on has been closed.");
+	}
+}
+
+static cpp11::list construct_retlist(duckdb::unique_ptr<PreparedStatement> stmt, ConnWrapper &conn, const string &query,
+                                     idx_t n_param, SEXP registered_dfs = R_NilValue) {
 	cpp11::writable::list retlist;
 	retlist.reserve(8);
 	retlist.push_back({"str"_nm = query});
 
-	auto stmtholder = make_uniq<RStatement>(std::move(stmt));
+	auto stmtholder = make_uniq<RStatement>(std::move(stmt), conn);
 
 	retlist.push_back({"type"_nm = StatementTypeToString(stmtholder->stmt->GetStatementType())});
 	retlist.push_back({"names"_nm = cpp11::as_sexp(stmtholder->stmt->GetNames())});
@@ -130,16 +141,14 @@ static cpp11::list construct_retlist(duckdb::unique_ptr<PreparedStatement> stmt,
 		rapi_error_with_context("rapi_prepare", error);
 	}
 	auto n_param = stmt->named_param_map.size();
-	return construct_retlist(std::move(stmt), query, n_param, conn->db->registered_dfs);
+	return construct_retlist(std::move(stmt), *conn.get(), query, n_param, conn->db->registered_dfs);
 }
 
 static SEXP rapi_execute_impl(RStatement *stmt, const duckdb::ConvertOpts &convert_opts, bool allow_stream_result);
 
 [[cpp11::register]] cpp11::list rapi_bind(duckdb::stmt_eptr_t stmt, cpp11::list params,
                                           duckdb::ConvertOpts convert_opts) {
-	if (!stmt || !stmt.get() || !stmt->stmt) {
-		rapi_error_with_context("rapi_bind", "Invalid statement");
-	}
+	CheckStatement(stmt, "rapi_bind");
 
 	auto n_param = stmt->stmt->named_param_map.size();
 
@@ -273,7 +282,7 @@ static SEXP rapi_execute_impl(RStatement *stmt, const duckdb::ConvertOpts &conve
 	}
 
 	if (convert_opts.arrow == ConvertOpts::ArrowConversion::ENABLED) {
-		auto query_result = make_uniq<RQueryResult>(std::move(generic_result));
+		auto query_result = make_uniq<RQueryResult>(std::move(generic_result), stmt->conn);
 		rqry_eptr_t query_resultsexp(query_result.release());
 		return query_resultsexp;
 	} else {
@@ -287,9 +296,7 @@ static SEXP rapi_execute_impl(RStatement *stmt, const duckdb::ConvertOpts &conve
 }
 
 [[cpp11::register]] SEXP rapi_execute(duckdb::stmt_eptr_t stmt, duckdb::ConvertOpts convert_opts) {
-	if (!stmt || !stmt.get() || !stmt->stmt) {
-		rapi_error_with_context("rapi_execute", "Invalid statement");
-	}
+	CheckStatement(stmt, "rapi_execute");
 
 	bool allow_stream_result = convert_opts.arrow == ConvertOpts::ArrowConversion::ENABLED &&
 	                           convert_opts.streaming == ConvertOpts::ResultStreaming::ENABLED;
