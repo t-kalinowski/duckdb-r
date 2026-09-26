@@ -11,22 +11,22 @@
 #' @usage NULL
 dbBind__duckdb_result <- function(res, params, ...) {
   if (!res@env$open) {
-    stop("result has already been cleared")
+    abort("result has already been cleared")
   }
 
   params <- as.list(params)
   if (!is.null(names(params))) {
-    stop("`params` must not be named")
+    abort("`params` must not be named")
   }
 
   # Validate parameter count (mirrors rapi_bind C++ validation), so that
   # structural errors still surface at bind time
   n_param <- res@stmt_lst$n_param
   if (n_param == 0) {
-    stop("`dbBind()` called but query takes no parameters", call. = FALSE)
+    abort("`dbBind()` called but query takes no parameters")
   }
   if (length(params) != n_param) {
-    stop("Bind parameters need to be a list of length ", n_param, call. = FALSE)
+    abort(paste0("Bind parameters need to be a list of length ", n_param))
   }
 
   res@env$rows_fetched <- 0

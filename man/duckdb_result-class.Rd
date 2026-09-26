@@ -107,8 +107,7 @@ types, ...).}
 
 \item{\code{arrow}}{whether the result is fetched via Arrow.}
 
-\item{\code{query_result}}{external pointer to the underlying materialized query
-result.}
+\item{\code{query_result}}{external pointer to the underlying materialized query result.}
 }}
 
 \keyword{internal}

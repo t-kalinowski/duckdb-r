@@ -3,7 +3,7 @@
 #' @usage NULL
 dbHasCompleted__duckdb_result <- function(res, ...) {
   if (!res@env$open) {
-    stop("result has already been cleared")
+    abort("result has already been cleared")
   }
 
   # Streaming results never populate resultset: completed once a dbFetch()

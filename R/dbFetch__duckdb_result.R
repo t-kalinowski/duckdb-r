@@ -4,12 +4,12 @@
 #' @usage NULL
 dbFetch__duckdb_result <- function(res, n = -1, ...) {
   if (!res@env$open) {
-    stop("result set was closed")
+    abort("result set was closed")
   }
 
   if (res@arrow) {
     if (n != -1) {
-      stop("Cannot dbFetch() an Arrow result unless n = -1")
+      abort("Cannot dbFetch() an Arrow result unless n = -1")
     }
     return(as.data.frame(duckdb_fetch_arrow(res)))
   }
@@ -30,7 +30,7 @@ dbFetch__duckdb_result <- function(res, n = -1, ...) {
         is.null(res@env$pending_params) &&
         is.null(res@env$stream_result)
     ) {
-      stop("Need to call `dbBind()` before `dbFetch()`", call. = FALSE)
+      abort("Need to call `dbBind()` before `dbFetch()`")
     }
     return(duckdb_stream_fetch(res, check_fetch_n(n)))
   }
@@ -41,7 +41,7 @@ dbFetch__duckdb_result <- function(res, n = -1, ...) {
     if (!is.null(res@env$pending_params)) {
       duckdb_execute_pending_bind(res)
     } else {
-      stop("Need to call `dbBind()` before `dbFetch()`", call. = FALSE)
+      abort("Need to call `dbBind()` before `dbFetch()`")
     }
   }
   if (res@stmt_lst$type == "EXPLAIN") {
@@ -67,6 +67,8 @@ dbFetch__duckdb_result <- function(res, n = -1, ...) {
     res@env$rows_fetched <- 0
   }
 
+  # `n` slices a resultset that is already fully materialized in R:
+  # handbook/usage/memory/reading/README.md, #1997, #2587.
   n_remaining <- nrow(res@env$resultset) - res@env$rows_fetched
 
   if (n == -1) {
@@ -96,16 +98,16 @@ dbFetch__duckdb_result <- function(res, n = -1, ...) {
 
 check_fetch_n <- function(n) {
   if (length(n) != 1) {
-    stop("need exactly one value in n", call. = FALSE)
+    abort("need exactly one value in n")
   }
   if (is.infinite(n) || is.na(n)) {
     n <- -1
   }
   if (n < -1) {
-    stop("cannot fetch negative n other than -1", call. = FALSE)
+    abort("cannot fetch negative n other than -1")
   }
   if (!is_wholenumber(n)) {
-    stop("n needs to be not a whole number", call. = FALSE)
+    abort("n needs to be not a whole number")
   }
   n
 }

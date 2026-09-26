@@ -46,13 +46,12 @@ dbSendQuery__duckdb_connection_character <- function(
     stream <- isTRUE(conn@stream)
   }
   if (isTRUE(stream) && isTRUE(arrow)) {
-    stop(
+    abort(paste0(
       "`stream = TRUE` cannot be combined with `arrow = TRUE` ",
       "(including a `dbConnect(stream = TRUE)` default). ",
       "The legacy `arrow = TRUE` path is slated for retirement: ",
-      "use `dbSendQueryArrow()` with `dbFetchArrow()` to stream via Arrow.",
-      call. = FALSE
-    )
+      "use `dbSendQueryArrow()` with `dbFetchArrow()` to stream via Arrow."
+    ))
   }
 
   env <- find_caller()

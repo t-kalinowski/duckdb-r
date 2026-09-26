@@ -3,7 +3,7 @@
 #' @usage NULL
 dbGetRowsAffected__duckdb_result <- function(res, ...) {
   if (!res@env$open) {
-    stop("result has already been cleared")
+    abort("result has already been cleared")
   }
   # dbExecute() never fetches: per the DBI spec, a statement whose parameters
   # are bound but whose execution is still pending runs now, so its side
