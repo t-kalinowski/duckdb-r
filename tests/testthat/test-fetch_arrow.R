@@ -15,11 +15,11 @@ test_that("duckdb_fetch_arrow() test table over vector size", {
     paste0("CREATE table test as select range a from range(10000);")
   )
   dbExecute(con, "INSERT INTO  test VALUES(NULL);")
-  arrow_table <- duckdb_fetch_arrow(dbSendQuery(
+  arrow_table <- duckdb_fetch_arrow(expect_deprecated_arrow(dbSendQuery(
     con,
     "SELECT * FROM test",
     arrow = TRUE
-  ))
+  )))
   duckdb_register_arrow(con, "testarrow", arrow_table)
 
   expect_equal(
@@ -35,11 +35,11 @@ test_that("duckdb_fetch_arrow() empty table", {
 
   dbExecute(con, paste0("CREATE TABLE test (a  INTEGER)"))
 
-  arrow_table <- duckdb_fetch_arrow(dbSendQuery(
+  arrow_table <- duckdb_fetch_arrow(expect_deprecated_arrow(dbSendQuery(
     con,
     "SELECT * FROM test",
     arrow = TRUE
-  ))
+  )))
   duckdb_register_arrow(con, "testarrow", arrow_table)
 
   expect_equal(
@@ -56,11 +56,11 @@ test_that("duckdb_fetch_arrow() table with only nulls", {
   dbExecute(con, paste0("CREATE TABLE test (a  INTEGER)"))
 
   dbExecute(con, "INSERT INTO  test VALUES(NULL);")
-  arrow_table <- duckdb_fetch_arrow(dbSendQuery(
+  arrow_table <- duckdb_fetch_arrow(expect_deprecated_arrow(dbSendQuery(
     con,
     "SELECT * FROM test",
     arrow = TRUE
-  ))
+  )))
   duckdb_register_arrow(con, "testarrow", arrow_table)
 
   expect_equal(
@@ -79,11 +79,11 @@ test_that("duckdb_fetch_arrow() table with prepared statement", {
   for (value in 1:1500) {
     dbExecute(con, sprintf("EXECUTE s1 (%d, %d);", value, value * 2))
   }
-  arrow_table <- duckdb_fetch_arrow(dbSendQuery(
+  arrow_table <- duckdb_fetch_arrow(expect_deprecated_arrow(dbSendQuery(
     con,
     "SELECT * FROM test",
     arrow = TRUE
-  ))
+  )))
   duckdb_register_arrow(con, "testarrow", arrow_table)
 
   expect_equal(
@@ -100,7 +100,11 @@ test_that("duckdb_fetch_arrow() record_batch_reader ", {
   con <- local_con()
 
   dbExecute(con, paste0("CREATE table t as select range a from range(3000);"))
-  res <- dbSendQuery(con, "SELECT * FROM t", arrow = TRUE)
+  res <- expect_deprecated_arrow(dbSendQuery(
+    con,
+    "SELECT * FROM t",
+    arrow = TRUE
+  ))
   record_batch_reader <- duckdb_fetch_record_batch(res, 1024)
   cur_batch <- record_batch_reader$read_next_batch()
   expect_equal(1024, cur_batch$num_rows)
@@ -119,7 +123,11 @@ test_that("duckdb_fetch_arrow() record_batch_reader multiple vectors per chunk",
   skip_if_not_installed("arrow", "4.0.1")
   con <- local_con()
   dbExecute(con, paste0("CREATE table t as select range a from range(5000);"))
-  res <- dbSendQuery(con, "SELECT * FROM t", arrow = TRUE)
+  res <- expect_deprecated_arrow(dbSendQuery(
+    con,
+    "SELECT * FROM t",
+    arrow = TRUE
+  ))
   record_batch_reader <- duckdb_fetch_record_batch(res, 2048)
   cur_batch <- record_batch_reader$read_next_batch()
   expect_equal(2048, cur_batch$num_rows)
@@ -137,10 +145,18 @@ test_that("record_batch_reader and table error", {
   skip_if_not_installed("arrow", "4.0.1")
   con <- local_con()
   dbExecute(con, paste0("CREATE table t as select range a from range(5000);"))
-  res <- dbSendQuery(con, "SELECT * FROM t", arrow = TRUE)
+  res <- expect_deprecated_arrow(dbSendQuery(
+    con,
+    "SELECT * FROM t",
+    arrow = TRUE
+  ))
   expect_error(duckdb_fetch_record_batch(res, 0))
   expect_error(duckdb_fetch_arrow(
-    dbSendQuery(con, "SELECT * FROM test", arrow = TRUE),
+    expect_deprecated_arrow(dbSendQuery(
+      con,
+      "SELECT * FROM test",
+      arrow = TRUE
+    )),
     0
   ))
 })
@@ -150,7 +166,11 @@ test_that("duckdb_fetch_arrow() record_batch_reader defaultparamenter", {
   skip_if_not_installed("arrow", "4.0.1")
   con <- local_con()
   dbExecute(con, paste0("CREATE table t as select range a from range(5000);"))
-  res <- dbSendQuery(con, "SELECT * FROM t", arrow = TRUE)
+  res <- expect_deprecated_arrow(dbSendQuery(
+    con,
+    "SELECT * FROM t",
+    arrow = TRUE
+  ))
   record_batch_reader <- duckdb_fetch_record_batch(res)
   cur_batch <- record_batch_reader$read_next_batch()
   expect_equal(5000, cur_batch$num_rows)
@@ -163,7 +183,11 @@ test_that("duckdb_fetch_arrow() record_batch_reader Read Table", {
   con <- local_con()
 
   dbExecute(con, paste0("CREATE table t as select range a from range(3000);"))
-  res <- dbSendQuery(con, "SELECT * FROM t", arrow = TRUE)
+  res <- expect_deprecated_arrow(dbSendQuery(
+    con,
+    "SELECT * FROM t",
+    arrow = TRUE
+  ))
   record_batch_reader <- duckdb_fetch_record_batch(res)
   arrow_table <- record_batch_reader$read_table()
   expect_equal(3000, arrow_table$num_rows)
@@ -172,7 +196,11 @@ test_that("duckdb_fetch_arrow() record_batch_reader Read Table", {
 test_that("fetching from a consumed query result errors instead of crashing", {
   con <- local_con()
 
-  res <- dbSendQuery(con, "SELECT 1 AS a", arrow = TRUE)
+  res <- expect_deprecated_arrow(dbSendQuery(
+    con,
+    "SELECT 1 AS a",
+    arrow = TRUE
+  ))
   record_batch_reader <- duckdb_fetch_record_batch(res)
   expect_true(inherits(record_batch_reader, "RecordBatchReader"))
 
@@ -188,8 +216,40 @@ test_that("fetching from a consumed query result errors instead of crashing", {
 test_that("duckdb_fetch_arrow() and duckdb_fetch_record_batch() refuse a cleared result", {
   con <- local_con()
 
-  res <- dbSendQuery(con, "SELECT * FROM range(10) t(i)", arrow = TRUE)
+  res <- expect_deprecated_arrow(dbSendQuery(
+    con,
+    "SELECT * FROM range(10) t(i)",
+    arrow = TRUE
+  ))
   dbClearResult(res)
   expect_error(duckdb_fetch_arrow(res), "closed")
   expect_error(duckdb_fetch_record_batch(res), "closed")
+})
+
+test_that("dbSendQuery(arrow = TRUE) and dbGetQuery(arrow = TRUE) are deprecated", {
+  con <- local_con()
+
+  expect_warning(
+    res <- dbSendQuery(con, "SELECT 1 AS a", arrow = TRUE),
+    "dbSendQueryArrow",
+    class = "deprecatedWarning"
+  )
+  dbClearResult(res)
+  expect_warning(
+    dbGetQuery(con, "SELECT 1 AS a", arrow = TRUE),
+    class = "deprecatedWarning"
+  )
+  expect_no_warning(dbGetQuery(con, "SELECT 1 AS a"))
+})
+
+test_that("the arrow = TRUE route does not warn when another package's code uses it", {
+  con <- local_con()
+
+  # arrow::to_arrow() still sends its query with `arrow = TRUE`.
+  other_pkg <- function(con) {
+    DBI::dbGetQuery(con, "SELECT 1 AS a", arrow = TRUE)
+  }
+  environment(other_pkg) <- asNamespace("stats")
+  withr::local_envvar(TESTTHAT_PKG = "")
+  expect_no_warning(other_pkg(con))
 })

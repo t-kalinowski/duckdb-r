@@ -197,11 +197,11 @@ numeric_operators <- function(data_type) {
     con,
     "INSERT INTO  test VALUES (1,1,1),(10,10,10),(100,10,100),(NULL,NULL,NULL)"
   )
-  arrow_table <- duckdb_fetch_arrow(dbSendQuery(
+  arrow_table <- duckdb_fetch_arrow(expect_deprecated_arrow(dbSendQuery(
     con,
     "SELECT * FROM test",
     arrow = TRUE
-  ))
+  )))
   duckdb_register_arrow(con, "testarrow", arrow_table)
 
   # Try ==
@@ -305,11 +305,11 @@ test_that("duckdb_register_arrow() performs selection pushdown varchar type", {
     con,
     "INSERT INTO  test VALUES ('1','1','1'),('10','10','10'),('100','10','100'),(NULL,NULL,NULL)"
   )
-  arrow_table <- duckdb_fetch_arrow(dbSendQuery(
+  arrow_table <- duckdb_fetch_arrow(expect_deprecated_arrow(dbSendQuery(
     con,
     "SELECT * FROM test",
     arrow = TRUE
-  ))
+  )))
   duckdb_register_arrow(con, "testarrow", arrow_table)
 
   # Try ==
@@ -383,11 +383,11 @@ test_that("duckdb_register_arrow() performs selection pushdown bool type", {
     con,
     "INSERT INTO  test VALUES (TRUE,TRUE),(TRUE,FALSE),(FALSE,TRUE),(NULL,NULL)"
   )
-  arrow_table <- duckdb_fetch_arrow(dbSendQuery(
+  arrow_table <- duckdb_fetch_arrow(expect_deprecated_arrow(dbSendQuery(
     con,
     "SELECT * FROM test",
     arrow = TRUE
-  ))
+  )))
   duckdb_register_arrow(con, "testarrow", arrow_table)
 
   # Try ==
@@ -517,11 +517,11 @@ test_that("duckdb_register_arrow() performs selection pushdown timestamp type", 
     con,
     "INSERT INTO  test VALUES ('2008-01-01 00:00:01','2008-01-01 00:00:01','2008-01-01 00:00:01'),('2010-01-01 10:00:01','2010-01-01 10:00:01','2010-01-01 10:00:01'),('2020-03-01 10:00:01','2010-01-01 10:00:01','2020-03-01 10:00:01'),(NULL,NULL,NULL)"
   )
-  arrow_table <- duckdb_fetch_arrow(dbSendQuery(
+  arrow_table <- duckdb_fetch_arrow(expect_deprecated_arrow(dbSendQuery(
     con,
     "SELECT * FROM test",
     arrow = TRUE
-  ))
+  )))
   duckdb_register_arrow(con, "testarrow", arrow_table)
 
   # Try ==
@@ -614,11 +614,11 @@ test_that("duckdb_register_arrow() performs selection pushdown timestamptz type"
     con,
     "INSERT INTO  test VALUES ('2008-01-01 00:00:01','2008-01-01 00:00:01','2008-01-01 00:00:01'),('2010-01-01 10:00:01','2010-01-01 10:00:01','2010-01-01 10:00:01'),('2020-03-01 10:00:01','2010-01-01 10:00:01','2020-03-01 10:00:01'),(NULL,NULL,NULL)"
   )
-  arrow_table <- duckdb_fetch_arrow(dbSendQuery(
+  arrow_table <- duckdb_fetch_arrow(expect_deprecated_arrow(dbSendQuery(
     con,
     "SELECT * FROM test",
     arrow = TRUE
-  ))
+  )))
   duckdb_register_arrow(con, "testarrow", arrow_table)
 
   # Try ==
@@ -708,11 +708,11 @@ test_that("duckdb_register_arrow() performs selection pushdown date type", {
     con,
     "INSERT INTO  test VALUES ('2000-01-01','2000-01-01','2000-01-01'),('2000-10-01','2000-10-01','2000-10-01'),('2010-01-01','2000-10-01','2010-01-01'),(NULL,NULL,NULL)"
   )
-  arrow_table <- duckdb_fetch_arrow(dbSendQuery(
+  arrow_table <- duckdb_fetch_arrow(expect_deprecated_arrow(dbSendQuery(
     con,
     "SELECT * FROM test",
     arrow = TRUE
-  ))
+  )))
   duckdb_register_arrow(con, "testarrow", arrow_table)
 
   # Try ==
