@@ -59,7 +59,11 @@ duckdb_result_arrow <- function(connection, stmt_lst) {
   )
 
   if (stmt_lst$n_param == 0) {
+    # A statement that fails as it runs here must not leave the result open on
+    # the connection: the caller never receives it, so nobody could clear it.
+    on.exit(dbClearResult(res))
     env$query_result <- duckdb_execute_arrow(res)
+    on.exit(NULL)
   }
 
   res
@@ -112,9 +116,12 @@ duckdb_result <- function(connection, stmt_lst, arrow) {
   )
 
   if (stmt_lst$n_param == 0) {
+    # A statement that fails as it runs here must not leave the result open on
+    # the connection: the caller never receives it, so nobody could clear it.
+    on.exit(dbClearResult(res))
     if (arrow) {
       query_result <- duckdb_execute(res)
-      new_res <- new(
+      res <- new(
         "duckdb_result",
         connection = connection,
         stmt_lst = stmt_lst,
@@ -122,13 +129,13 @@ duckdb_result <- function(connection, stmt_lst, arrow) {
         arrow = arrow,
         query_result = query_result
       )
-      return(new_res)
     } else {
       duckdb_execute(res)
     }
+    on.exit(NULL)
   }
 
-  return(res)
+  res
 }
 
 duckdb_execute <- function(res) {

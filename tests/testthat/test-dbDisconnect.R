@@ -46,6 +46,18 @@ test_that("dbDisconnect() is silent once every result is cleared", {
   expect_no_warning(dbDisconnect(con))
 })
 
+test_that("a statement that fails at send time leaves no result open", {
+  con <- connect_here()
+
+  # Fails as it runs, after the result exists; the caller never receives it.
+  expect_error(dbGetQuery(con, "SELECT chr(0)"))
+  # Fails at the bind that `params` asks for, the same way.
+  expect_error(dbGetQuery(con, "SELECT ?::INTEGER", params = list("x")))
+  expect_error(dbExecute(con, "SELECT ?::INTEGER", params = list(1, 2)))
+
+  expect_no_warning(dbDisconnect(con))
+})
+
 test_that("the warning counts the results still open", {
   con <- connect_here()
   res1 <- dbSendQuery(con, "SELECT 1 AS a")
