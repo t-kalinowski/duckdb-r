@@ -59,30 +59,20 @@ Each statement is expanded and prepared only after the ones before it have run,
 so a `PRAGMA` that generates its SQL from what is there when it runs sees what they made:
 `create_fts_index` reads a table created earlier in the same string, and `import_database` the files an earlier `EXPORT DATABASE` wrote
 ([#2792](https://github.com/duckdb/duckdb-r/pull/2792)).
-
 The whole input string is parsed before any statement runs, so a syntax error in the input prevents all execution.
 Under `allow_extensions = FALSE`, an `INSTALL` or `LOAD` anywhere in it stops everything the same way,
 because `rapi_prepare()` checks every statement before the first runs.
-
-If an error occurs while preparing or executing a statement, no later statements run.
-Changes already committed by earlier statements are not automatically rolled back:
-submitting several statements in one string does not itself put them in a single transaction.
+An error during preparation or execution stops later statements; earlier committed changes are not automatically rolled back.
+The string runs in no transaction of its own.
 The statements a `PRAGMA` expands to run in one transaction, which a failure rolls back.
 While a streaming result is open on the connection, the engine finds a transaction active and opens none,
 so an `import_database` whose second CSV fails to parse leaves the first table loaded
 ([`2026-09-27-review-limits/`](/experiments/2026-09-27-review-limits/README.md)).
-
-To run the statements in a single transaction, use `dbWithTransaction()`.
-Alternatively, call `dbBegin()` before submitting the SQL, then `dbCommit()` on success or `dbRollback()` on failure.
+To run the statements in one transaction, use `dbWithTransaction()`,
+or `dbBegin()` before the call with `dbCommit()` on success and `dbRollback()` on failure.
 A `PRAGMA` inside that transaction sees what the transaction has done so far.
-
-An inline `BEGIN TRANSACTION` can also be used.
-Because the whole string is parsed first, a syntax error prevents `BEGIN` and all other statements from running.
-Nothing from that call needs to be rolled back.
-Calling `dbRollback()` when no transaction is active raises an error.
-`dbWithTransaction()` starts the transaction in a separate call before submitting the SQL string,
-so it can handle rollback consistently for both parsing and execution errors.
-
+An inline `BEGIN TRANSACTION` works too, but never runs if input parsing fails.
+If no transaction is active, `dbRollback()` then raises an error.
 The engine's own `Query()` runs a string the same way from DuckDB 2.0,
 except that it also parses each statement only when it reaches it
 ([duckdb/duckdb#23291](https://github.com/duckdb/duckdb/pull/23291)).

@@ -173,44 +173,26 @@ superseded by \code{convert_opts}.}
 
 \section{Multiple statements}{
 
-A \code{statement} can contain several SQL statements separated by semicolons.
-This applies to \code{\link[DBI:dbSendQuery]{dbSendQuery()}}, \code{\link[DBI:dbSendQueryArrow]{dbSendQueryArrow()}},
-and helpers such as \code{\link[DBI:dbExecute]{dbExecute()}} and \code{\link[DBI:dbGetQuery]{dbGetQuery()}}.
+A \code{statement} can hold several SQL statements separated by semicolons,
+in \code{\link[DBI:dbSendQuery]{dbSendQuery()}}, \code{\link[DBI:dbSendQueryArrow]{dbSendQueryArrow()}},
+and the helpers built on them, such as \code{\link[DBI:dbExecute]{dbExecute()}} and \code{\link[DBI:dbGetQuery]{dbGetQuery()}}.
+They run in order, and each is prepared only after those before it have run,
+so it sees their effects:
+a \code{PRAGMA} that generates SQL, such as \code{create_fts_index},
+finds a table created earlier in the same string.
+Every statement but the last runs when the query is sent,
+\code{params} bind to the last statement only,
+and only the last statement's result is returned.
 
-Statements run in order.
-Each statement is expanded and prepared after the preceding statements
-have run, so it can see their effects.
-For example, \verb{PRAGMA create_fts_index(...)} can find a table
-created earlier in the same string.
-All statements before the last execute when the query is sent.
-\code{params} apply only to the last statement, and only its result is returned.
-
-The whole input string is parsed before any statement runs.
-A syntax error in the input therefore prevents all execution.
-Other checks performed before execution can also reject the whole call.
-For example, when \code{allow_extensions = FALSE}, an \code{INSTALL} or \code{LOAD}
-anywhere in the string prevents any of its statements from running.
-
-If an error occurs while preparing or executing a statement,
-no later statements run.
-Changes already committed by earlier statements are not automatically
-rolled back: submitting several statements in one string does not itself
-put them in a single transaction.
-
-To run the statements in a single transaction, use \code{\link[DBI:dbWithTransaction]{dbWithTransaction()}}.
-Alternatively, call \code{\link[DBI:dbBegin]{dbBegin()}} before submitting the SQL,
-then \code{\link[DBI:dbCommit]{dbCommit()}} on success or \code{\link[DBI:dbRollback]{dbRollback()}} on failure.
-
-An inline \verb{BEGIN TRANSACTION} can also be used.
-Because the whole string is parsed first, a syntax error prevents \code{BEGIN}
-and all other statements from running.
-Nothing from that call needs to be rolled back.
-Calling \code{\link[DBI:dbRollback]{dbRollback()}} when no transaction is active raises an error.
-\code{\link[DBI:dbWithTransaction]{dbWithTransaction()}} starts the transaction in a separate call before
-submitting the SQL string, so it can handle rollback consistently
-for both parsing and execution errors.
-
-To track which statements completed before an error,
+The whole input string is parsed before anything runs.
+Syntax errors in that input, and \code{INSTALL} or \code{LOAD} under
+\code{allow_extensions = FALSE}, reject the whole call.
+An error during preparation or execution stops later statements;
+earlier committed changes are not automatically rolled back.
+To run the statements in one transaction, use \code{\link[DBI:dbWithTransaction]{dbWithTransaction()}},
+or call \code{\link[DBI:dbBegin]{dbBegin()}} before the query, then \code{\link[DBI:dbCommit]{dbCommit()}} on success
+or \code{\link[DBI:dbRollback]{dbRollback()}} on failure.
+To know which statements have run when one fails,
 send one statement per call.
 }
 

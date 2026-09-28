@@ -5,44 +5,26 @@
 #' @inheritParams DBI::dbBind
 #' @param arrow Whether the query should be returned as an Arrow Table
 #' @section Multiple statements:
-#' A `statement` can contain several SQL statements separated by semicolons.
-#' This applies to [dbSendQuery()], [dbSendQueryArrow()],
-#' and helpers such as [dbExecute()] and [dbGetQuery()].
+#' A `statement` can hold several SQL statements separated by semicolons,
+#' in [dbSendQuery()], [dbSendQueryArrow()],
+#' and the helpers built on them, such as [dbExecute()] and [dbGetQuery()].
+#' They run in order, and each is prepared only after those before it have run,
+#' so it sees their effects:
+#' a `PRAGMA` that generates SQL, such as `create_fts_index`,
+#' finds a table created earlier in the same string.
+#' Every statement but the last runs when the query is sent,
+#' `params` bind to the last statement only,
+#' and only the last statement's result is returned.
 #'
-#' Statements run in order.
-#' Each statement is expanded and prepared after the preceding statements
-#' have run, so it can see their effects.
-#' For example, `PRAGMA create_fts_index(...)` can find a table
-#' created earlier in the same string.
-#' All statements before the last execute when the query is sent.
-#' `params` apply only to the last statement, and only its result is returned.
-#'
-#' The whole input string is parsed before any statement runs.
-#' A syntax error in the input therefore prevents all execution.
-#' Other checks performed before execution can also reject the whole call.
-#' For example, when `allow_extensions = FALSE`, an `INSTALL` or `LOAD`
-#' anywhere in the string prevents any of its statements from running.
-#'
-#' If an error occurs while preparing or executing a statement,
-#' no later statements run.
-#' Changes already committed by earlier statements are not automatically
-#' rolled back: submitting several statements in one string does not itself
-#' put them in a single transaction.
-#'
-#' To run the statements in a single transaction, use [dbWithTransaction()].
-#' Alternatively, call [dbBegin()] before submitting the SQL,
-#' then [dbCommit()] on success or [dbRollback()] on failure.
-#'
-#' An inline `BEGIN TRANSACTION` can also be used.
-#' Because the whole string is parsed first, a syntax error prevents `BEGIN`
-#' and all other statements from running.
-#' Nothing from that call needs to be rolled back.
-#' Calling [dbRollback()] when no transaction is active raises an error.
-#' [dbWithTransaction()] starts the transaction in a separate call before
-#' submitting the SQL string, so it can handle rollback consistently
-#' for both parsing and execution errors.
-#'
-#' To track which statements completed before an error,
+#' The whole input string is parsed before anything runs.
+#' Syntax errors in that input, and `INSTALL` or `LOAD` under
+#' `allow_extensions = FALSE`, reject the whole call.
+#' An error during preparation or execution stops later statements;
+#' earlier committed changes are not automatically rolled back.
+#' To run the statements in one transaction, use [dbWithTransaction()],
+#' or call [dbBegin()] before the query, then [dbCommit()] on success
+#' or [dbRollback()] on failure.
+#' To know which statements have run when one fails,
 #' send one statement per call.
 #' @usage NULL
 dbSendQuery__duckdb_connection_character <- function(
