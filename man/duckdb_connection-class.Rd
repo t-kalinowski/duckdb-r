@@ -201,13 +201,14 @@ To run the statements in a single transaction, use \code{\link[DBI:dbWithTransac
 Alternatively, call \code{\link[DBI:dbBegin]{dbBegin()}} before submitting the SQL,
 then \code{\link[DBI:dbCommit]{dbCommit()}} on success or \code{\link[DBI:dbRollback]{dbRollback()}} on failure.
 
-A \verb{BEGIN TRANSACTION} inside the SQL string also starts a transaction
-when execution reaches it.
-However, if parsing fails, \code{BEGIN} never runs and there is no transaction
-to roll back.
-Starting the transaction before submitting the string avoids this
-distinction; \code{\link[DBI:dbWithTransaction]{dbWithTransaction()}} also handles rollback automatically
-when the call fails.
+An inline \verb{BEGIN TRANSACTION} can also be used.
+Because the whole string is parsed first, a syntax error prevents \code{BEGIN}
+and all other statements from running.
+Nothing from that call needs to be rolled back.
+Calling \code{\link[DBI:dbRollback]{dbRollback()}} when no transaction is active raises an error.
+\code{\link[DBI:dbWithTransaction]{dbWithTransaction()}} starts the transaction in a separate call before
+submitting the SQL string, so it can handle rollback consistently
+for both parsing and execution errors.
 
 To track which statements completed before an error,
 send one statement per call.

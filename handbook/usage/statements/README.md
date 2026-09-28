@@ -76,10 +76,12 @@ To run the statements in a single transaction, use `dbWithTransaction()`.
 Alternatively, call `dbBegin()` before submitting the SQL, then `dbCommit()` on success or `dbRollback()` on failure.
 A `PRAGMA` inside that transaction sees what the transaction has done so far.
 
-A `BEGIN TRANSACTION` inside the SQL string also starts a transaction when execution reaches it.
-However, if parsing fails, `BEGIN` never runs and there is no transaction to roll back.
-Starting the transaction before submitting the string avoids this distinction;
-`dbWithTransaction()` also handles rollback automatically when the call fails.
+An inline `BEGIN TRANSACTION` can also be used.
+Because the whole string is parsed first, a syntax error prevents `BEGIN` and all other statements from running.
+Nothing from that call needs to be rolled back.
+Calling `dbRollback()` when no transaction is active raises an error.
+`dbWithTransaction()` starts the transaction in a separate call before submitting the SQL string,
+so it can handle rollback consistently for both parsing and execution errors.
 
 The engine's own `Query()` runs a string the same way from DuckDB 2.0,
 except that it also parses each statement only when it reaches it

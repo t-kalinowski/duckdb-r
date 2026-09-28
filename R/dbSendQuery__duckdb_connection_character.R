@@ -33,13 +33,14 @@
 #' Alternatively, call [dbBegin()] before submitting the SQL,
 #' then [dbCommit()] on success or [dbRollback()] on failure.
 #'
-#' A `BEGIN TRANSACTION` inside the SQL string also starts a transaction
-#' when execution reaches it.
-#' However, if parsing fails, `BEGIN` never runs and there is no transaction
-#' to roll back.
-#' Starting the transaction before submitting the string avoids this
-#' distinction; [dbWithTransaction()] also handles rollback automatically
-#' when the call fails.
+#' An inline `BEGIN TRANSACTION` can also be used.
+#' Because the whole string is parsed first, a syntax error prevents `BEGIN`
+#' and all other statements from running.
+#' Nothing from that call needs to be rolled back.
+#' Calling [dbRollback()] when no transaction is active raises an error.
+#' [dbWithTransaction()] starts the transaction in a separate call before
+#' submitting the SQL string, so it can handle rollback consistently
+#' for both parsing and execution errors.
 #'
 #' To track which statements completed before an error,
 #' send one statement per call.
