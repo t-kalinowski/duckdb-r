@@ -252,6 +252,10 @@ rapi_rel_from_altrep_df <- function(df, strict, allow_materialized, wrap) {
   .Call(`_duckdb_rapi_rel_from_altrep_df`, df, strict, allow_materialized, wrap)
 }
 
+rapi_export_connection <- function(connection, environment) {
+  .Call(`_duckdb_rapi_export_connection`, connection, environment)
+}
+
 rapi_release <- function(stmt) {
   invisible(.Call(`_duckdb_rapi_release`, stmt))
 }

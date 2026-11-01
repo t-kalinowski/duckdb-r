@@ -147,6 +147,7 @@ RStrings::RStrings() {
 	duckdb_row_names_sym = Rf_install("duckdb_row_names");
 	duckdb_vector_sym = Rf_install("duckdb_vector");
 	crs_sym = Rf_install("crs");
+	conn_ref_sym = Rf_install("conn_ref");
 	ptype_sym = Rf_install("ptype");
 }
 

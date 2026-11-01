@@ -188,6 +188,8 @@ typedef DualWrapper<DBWrapper> DBWrapperDual;
 
 typedef cpp11::external_pointer<DBWrapperDual> db_eptr_t;
 
+struct SharedConnectionExport;
+
 struct ConnWrapper {
 	ConnWrapper() = delete;
 	ConnWrapper(std::shared_ptr<DBWrapper> db_p, ConvertOpts convert_opts_p)
@@ -197,8 +199,11 @@ struct ConnWrapper {
 	std::shared_ptr<DBWrapper> db;
 	duckdb::unique_ptr<Connection> conn;
 	const ConvertOpts convert_opts;
+	std::vector<std::weak_ptr<SharedConnectionExport>> shared_exports;
 };
 
+//! Notify imported views before native destruction, while no engine lock is held.
+void CloseSharedConnection(ConnWrapper &connection);
 void ConnDeleter(ConnWrapper *);
 typedef cpp11::external_pointer<ConnWrapper, ConnDeleter> conn_eptr_t;
 
@@ -248,6 +253,10 @@ private:
 bool OnRThread();
 //! Records the calling thread as R's; called once, when R loads the package.
 void RecordRThread();
+//! Release a preserved R object now, or defer it until R next enters the engine.
+void ReleasePreservedRObject(SEXP object);
+//! Drain releases queued by native destructors on other threads. Called on R's thread only.
+void DrainRObjectReleases();
 
 struct RStatement {
 	RStatement() = delete;
@@ -482,6 +491,7 @@ struct RStrings {
 	SEXP duckdb_row_names_sym;
 	SEXP duckdb_vector_sym;
 	SEXP crs_sym;
+	SEXP conn_ref_sym;
 
 	static const RStrings &get() {
 		// On demand

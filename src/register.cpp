@@ -1,3 +1,4 @@
+#include "../inst/include/duckdb_shared_connection.h"
 #include "duckdb/common/arrow/arrow_wrapper.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/function/table/arrow.hpp"
@@ -83,8 +84,30 @@ using namespace duckdb;
 	}
 }
 
+class RFrameDependency : public DependencyItem {
+public:
+	explicit RFrameDependency(SEXP frame_p) : frame(frame_p) {
+		R_PreserveObject(frame);
+	}
+	~RFrameDependency() override {
+		ReleasePreservedRObject(frame);
+	}
+
+private:
+	SEXP frame;
+};
+
 unique_ptr<TableRef> duckdb::EnvironmentScanReplacement(ClientContext &context, ReplacementScanInput &input,
                                                         optional_ptr<ReplacementScanData> data_p) {
+	auto scans = context.registered_state->Get<SharedConnectionScanState>(SharedConnectionScanState::Key());
+	if (scans) {
+		if (auto resolved = scans->RecallResolved(input.table_name)) {
+			return resolved;
+		}
+		if (scans->PinnedExclusively()) {
+			return nullptr;
+		}
+	}
 	auto &data = (ReplacementDataDBWrapper &)*data_p;
 	auto db_wrapper = data.wrapper;
 
@@ -140,6 +163,13 @@ unique_ptr<TableRef> duckdb::EnvironmentScanReplacement(ClientContext &context, 
 	// binds (e.g. during rel_to_altrep()) do not need to look up the data
 	// frame from the environment again.
 	table_function->external_dependency = make_shared_ptr<ExternalDependency>();
+	// A foreign lazy relation has no R result object to retain this frame.
+	// Its native table reference must keep the original frame alive when the
+	// environment binding changes, and release it with the relation.
+	table_function->external_dependency->AddDependency("r_dataframe", make_shared_ptr<RFrameDependency>(df));
+	if (scans) {
+		scans->RecordResolved(input.table_name, *table_function);
+	}
 	return std::move(table_function);
 }
 

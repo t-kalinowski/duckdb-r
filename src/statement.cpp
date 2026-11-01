@@ -73,6 +73,7 @@ void RCallbackScope::Drain() {
 	for (auto &object : to_destroy) {
 		object.reset();
 	}
+	DrainRObjectReleases();
 }
 
 // Only a finalizer gets here with the statement still held, from a garbage collection or from R's exit,

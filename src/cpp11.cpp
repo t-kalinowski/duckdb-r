@@ -463,6 +463,13 @@ extern "C" SEXP _duckdb_rapi_rel_from_altrep_df(SEXP df, SEXP strict, SEXP allow
     return cpp11::as_sexp(rapi_rel_from_altrep_df(cpp11::as_cpp<cpp11::decay_t<SEXP>>(df), cpp11::as_cpp<cpp11::decay_t<bool>>(strict), cpp11::as_cpp<cpp11::decay_t<bool>>(allow_materialized), cpp11::as_cpp<cpp11::decay_t<bool>>(wrap)));
   END_CPP11
 }
+// shared_connection.cpp
+cpp11::list rapi_export_connection(SEXP connection, SEXP environment);
+extern "C" SEXP _duckdb_rapi_export_connection(SEXP connection, SEXP environment) {
+  BEGIN_CPP11
+    return cpp11::as_sexp(rapi_export_connection(cpp11::as_cpp<cpp11::decay_t<SEXP>>(connection), cpp11::as_cpp<cpp11::decay_t<SEXP>>(environment)));
+  END_CPP11
+}
 // statement.cpp
 void rapi_release(duckdb::stmt_eptr_t stmt);
 extern "C" SEXP _duckdb_rapi_release(SEXP stmt) {
@@ -546,6 +553,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_duckdb_rapi_disconnect",                         (DL_FUNC) &_duckdb_rapi_disconnect,                          1},
     {"_duckdb_rapi_execute",                            (DL_FUNC) &_duckdb_rapi_execute,                             2},
     {"_duckdb_rapi_execute_arrow",                      (DL_FUNC) &_duckdb_rapi_execute_arrow,                       2},
+    {"_duckdb_rapi_export_connection",                  (DL_FUNC) &_duckdb_rapi_export_connection,                   2},
     {"_duckdb_rapi_expr_comparison",                    (DL_FUNC) &_duckdb_rapi_expr_comparison,                     3},
     {"_duckdb_rapi_expr_constant",                      (DL_FUNC) &_duckdb_rapi_expr_constant,                       3},
     {"_duckdb_rapi_expr_function",                      (DL_FUNC) &_duckdb_rapi_expr_function,                       5},

@@ -121,3 +121,34 @@ The load-bearing facts:
   [`architecture/glue/objects/`](/handbook/architecture/glue/objects/README.md)'s.
 
 *To deepen: absorb the instance and caching section of `?duckdb`.*
+
+## Sharing with another language binding
+
+`duckdb_export_connection(con, environment = globalenv())` exports the original
+session through the native protocol in
+[`inst/include/duckdb_shared_connection.h`](/inst/include/duckdb_shared_connection.h).
+It returns a descriptor address and an owning external pointer, without executing
+SQL or changing transaction state. A consumer keeps the owner alive while it uses
+the descriptor and rejects incompatible protocol or native ABI identities before
+accessing the engine objects.
+
+The producer retains the R connection and lookup environment. A foreign operation
+runs on R's owning thread, within the same reentrancy boundary as an R query, and
+supplies that environment to R dataframe discovery. Lazy native relations retain
+their discovered frames until the relations are released, so results remain valid
+after a name is rebound without retaining frames from every past query.
+The native R connection and its relational API remain available to DBI and duckplyr.
+Sharing does not change which connection duckplyr selects for its own workflows.
+
+A Python user-defined function that calls R must run on R's owning thread.
+Set `threads = 1` before invoking such a function. Ordinary native queries can
+execute in parallel.
+
+An explicit close notifies imported views before destroying the connection, outside
+engine locks. Each view releases its outstanding results in that notification.
+The producer ends its R streams and rolls back an open transaction before closing,
+even when an R result still holds the underlying client context.
+A refused notification leaves the native connection open, although views already
+notified may have discarded results. Collecting an export only releases its references;
+it does not explicitly disconnect the R connection. The protocol is process-local
+and does not make R objects safe to query from background threads.

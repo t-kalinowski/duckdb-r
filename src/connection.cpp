@@ -18,20 +18,29 @@ void duckdb::ConnDeleter(ConnWrapper *conn) {
 	delete conn;
 }
 
-// The callbacks of displays destroyed off R's thread, where R must not be called:
-// the next display, built on R's thread, releases them.
-static std::mutex orphaned_callbacks_lock;
-static std::vector<SEXP> orphaned_callbacks;
+// Displays and frame dependencies can be destroyed off R's thread. The next
+// R entry point releases their preserved objects without calling R off-thread.
+static std::mutex pending_r_releases_lock;
+static std::vector<SEXP> pending_r_releases;
 
-static void ReleaseOrphanedCallbacks() {
-	std::vector<SEXP> callbacks;
+void duckdb::DrainRObjectReleases() {
+	std::vector<SEXP> objects;
 	{
-		std::lock_guard<std::mutex> guard(orphaned_callbacks_lock);
-		callbacks.swap(orphaned_callbacks);
+		std::lock_guard<std::mutex> guard(pending_r_releases_lock);
+		objects.swap(pending_r_releases);
 	}
-	for (auto callback : callbacks) {
-		R_ReleaseObject(callback);
+	for (auto object : objects) {
+		R_ReleaseObject(object);
 	}
+}
+
+void duckdb::ReleasePreservedRObject(SEXP object) {
+	if (OnRThread()) {
+		R_ReleaseObject(object);
+		return;
+	}
+	std::lock_guard<std::mutex> guard(pending_r_releases_lock);
+	pending_r_releases.push_back(object);
 }
 
 unique_ptr<ProgressBarDisplay> RProgressBarDisplay::Create() {
@@ -58,7 +67,7 @@ void RProgressBarDisplay::Initialize() {
 
 // The engine builds the display when a query starts, on the thread that issues it, which is R's.
 RProgressBarDisplay::RProgressBarDisplay() : ProgressBarDisplay() {
-	ReleaseOrphanedCallbacks();
+	DrainRObjectReleases();
 	Initialize();
 }
 
@@ -66,12 +75,7 @@ RProgressBarDisplay::~RProgressBarDisplay() {
 	if (progress_callback == R_NilValue) {
 		return;
 	}
-	if (OnRThread()) {
-		R_ReleaseObject(progress_callback);
-		return;
-	}
-	std::lock_guard<std::mutex> guard(orphaned_callbacks_lock);
-	orphaned_callbacks.push_back(progress_callback);
+	ReleasePreservedRObject(progress_callback);
 }
 
 void RProgressBarDisplay::Update(double percentage) {
@@ -129,8 +133,12 @@ static void SetDefaultConfigArguments(ClientContext &context) {
 }
 
 [[cpp11::register]] void rapi_disconnect(duckdb::conn_eptr_t conn) {
-	auto conn_wrapper = conn.release();
+	auto conn_wrapper = conn.get();
 	if (conn_wrapper) {
+		// A foreign view can refuse a close while it is executing. Keep the R
+		// pointer valid until all views have released their pending results.
+		CloseSharedConnection(*conn_wrapper);
+		conn.release();
 		delete conn_wrapper;
 	}
 }
