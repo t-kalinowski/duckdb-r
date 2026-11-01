@@ -11,6 +11,16 @@ in-memory connection.
 - [`default_conn()`](https://r.duckdb.org/reference/default_conn.md)
   **\[experimental\]** : Get the default connection
 
+## Data types
+
+What each DuckDB type becomes in R and which R value writes it back,
+through R vectors and through Arrow, geometry included.
+
+- [`duckdb_types`](https://r.duckdb.org/reference/duckdb_types.md) :
+  DuckDB data types in R
+- [`duckdb_types_arrow`](https://r.duckdb.org/reference/duckdb_types_arrow.md)
+  : DuckDB data types through Arrow
+
 ## Memory
 
 Reading and writing large data within a memory budget: the limit, the
@@ -48,6 +58,7 @@ The DBI connection to a DuckDB database and its methods.
   [`dbExistsTable(`*`<duckdb_connection>`*`,`*`<ANY>`*`)`](https://r.duckdb.org/reference/duckdb_connection-class.md)
   [`dbGetInfo(`*`<duckdb_connection>`*`)`](https://r.duckdb.org/reference/duckdb_connection-class.md)
   [`dbIsValid(`*`<duckdb_connection>`*`)`](https://r.duckdb.org/reference/duckdb_connection-class.md)
+  [`dbListFields(`*`<duckdb_connection>`*`,`*`<Id>`*`)`](https://r.duckdb.org/reference/duckdb_connection-class.md)
   [`dbListFields(`*`<duckdb_connection>`*`,`*`<character>`*`)`](https://r.duckdb.org/reference/duckdb_connection-class.md)
   [`dbListTables(`*`<duckdb_connection>`*`)`](https://r.duckdb.org/reference/duckdb_connection-class.md)
   [`dbQuoteIdentifier(`*`<duckdb_connection>`*`,`*`<ANY>`*`)`](https://r.duckdb.org/reference/duckdb_connection-class.md)
@@ -97,6 +108,8 @@ files, and inspecting query plans.
   [`duckdb_unregister_arrow()`](https://r.duckdb.org/reference/duckdb_register_arrow.md)
   [`duckdb_list_arrow()`](https://r.duckdb.org/reference/duckdb_register_arrow.md)
   : Register an Arrow data source as a virtual table
+- [`to_arrow_stream()`](https://r.duckdb.org/reference/to_arrow_stream.md)
+  **\[experimental\]** : Stream a dbplyr table on DuckDB into Arrow
 - [`duckdb_read_csv()`](https://r.duckdb.org/reference/duckdb_read_csv.md)
   : Reads a CSV file into DuckDB
 - [`duckdb_explain-class`](https://r.duckdb.org/reference/duckdb_explain-class.md)
@@ -109,8 +122,8 @@ files, and inspecting query plans.
 What a failing query raises, and the fields to classify it by instead of
 parsing the message.
 
-- [`duckdb_error`](https://r.duckdb.org/reference/duckdb_error.md) :
-  DuckDB error conditions
+- [`duckdb_error`](https://r.duckdb.org/reference/duckdb_error.md)
+  **\[experimental\]** : DuckDB error conditions
 
 ## Storage locations
 
