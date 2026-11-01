@@ -1,4 +1,5 @@
 #include "signal.hpp"
+#include "rapi.hpp"
 
 #include "cpp11.hpp"
 #include "cpp11/R.hpp"
@@ -30,8 +31,12 @@ ScopedInterruptHandler::ScopedInterruptHandler(shared_ptr<ClientContext> context
 		throw InternalException("Connection already working on another query");
 	}
 	if (context) {
-		instance = this;
-		oldhandler = std::signal(SIGINT, ScopedInterruptHandler::signal_handler);
+		foreign_operation = BeginImportedOperation(context);
+		if (!instance) {
+			instance = this;
+			owns_handler = true;
+			oldhandler = std::signal(SIGINT, ScopedInterruptHandler::signal_handler);
+		}
 	}
 }
 
@@ -43,6 +48,7 @@ ScopedInterruptHandler::~ScopedInterruptHandler() {
 	if (instance == this) {
 		instance = nullptr;
 	}
+	foreign_operation.reset();
 }
 
 bool ScopedInterruptHandler::IsActive() {
@@ -81,7 +87,9 @@ void ScopedInterruptHandler::Disable() {
 	// of the two. An extension that removes its own -- MotherDuck's sign-in
 	// wait does -- nests correctly here and loses nothing.
 	if (context) {
-		std::signal(SIGINT, oldhandler);
+		if (owns_handler) {
+			std::signal(SIGINT, oldhandler);
+		}
 		context.reset();
 	}
 }

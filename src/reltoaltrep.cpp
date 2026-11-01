@@ -211,11 +211,14 @@ QueryResult *AltrepRelationWrapper::GetQueryResult() {
 			rapi_error_with_context("GetQueryResult",
 			                        "Cannot materialize a relation of the connection that is running the query.");
 		}
-		EndOpenResults(context);
 		duckdb::unique_ptr<ScopedInterruptHandler> signal_handler;
+		std::shared_ptr<void> foreign_operation;
 		if (!ScopedInterruptHandler::IsActive()) {
 			signal_handler = make_uniq<ScopedInterruptHandler>(rel->context->GetContext());
+		} else {
+			foreign_operation = BeginImportedOperation(rel->context->GetContext());
 		}
+		EndOpenResults(context);
 
 		// We need to temporarily allow a deeper execution stack
 		// https://github.com/duckdb/duckdb-r/issues/101

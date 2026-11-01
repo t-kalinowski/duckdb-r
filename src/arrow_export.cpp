@@ -304,6 +304,7 @@ static void CheckQueryResult(const duckdb::rqry_eptr_t &qry_res, const char *con
 // Turn a DuckDB result set into an Arrow Table
 [[cpp11::register]] SEXP rapi_execute_arrow(duckdb::rqry_eptr_t qry_res, int chunk_size) {
 	CheckQueryResult(qry_res, "rapi_execute_arrow");
+	auto foreign_operation = BeginImportedOperation(qry_res->context);
 	if (!qry_res->result) {
 		rapi_error_with_context("rapi_execute_arrow", "Result has already been consumed");
 	}
@@ -346,7 +347,8 @@ static void CheckQueryResult(const duckdb::rqry_eptr_t &qry_res, const char *con
 RArrowArrayStreamWrapper::RArrowArrayStreamWrapper(duckdb::shared_ptr<ClientContext> context_p,
                                                    duckdb::unique_ptr<QueryResult> result, idx_t batch_size,
                                                    bool invalidated)
-    : context(std::move(context_p)), engine(std::move(result), batch_size, invalidated) {
+    : database(GetImportedDatabase(context_p)), context(std::move(context_p)),
+      engine(std::move(result), batch_size, invalidated) {
 	stream.get_schema = GetSchema;
 	stream.get_next = GetNext;
 	stream.get_last_error = GetLastError;
@@ -384,7 +386,13 @@ int RArrowArrayStreamWrapper::GetNext(ArrowArrayStream *stream, ArrowArray *out)
 	if (wrapper->Invalidated()) {
 		return wrapper->ReportInvalidated();
 	}
-	return wrapper->engine.stream.get_next(&wrapper->engine.stream, out);
+	try {
+		auto foreign_operation = BeginImportedOperation(wrapper->context);
+		return wrapper->engine.stream.get_next(&wrapper->engine.stream, out);
+	} catch (const std::exception &error) {
+		wrapper->last_error = ErrorData(error);
+		return EINVAL;
+	}
 }
 
 const char *RArrowArrayStreamWrapper::GetLastError(ArrowArrayStream *stream) {

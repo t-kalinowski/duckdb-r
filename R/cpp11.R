@@ -256,6 +256,10 @@ rapi_export_connection <- function(connection, environment) {
   .Call(`_duckdb_rapi_export_connection`, connection, environment)
 }
 
+rapi_import_connection <- function(exported, convert_opts) {
+  .Call(`_duckdb_rapi_import_connection`, exported, convert_opts)
+}
+
 rapi_release <- function(stmt) {
   invisible(.Call(`_duckdb_rapi_release`, stmt))
 }

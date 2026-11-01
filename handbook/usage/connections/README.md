@@ -152,3 +152,27 @@ A refused notification leaves the native connection open, although views already
 notified may have discarded results. Collecting an export only releases its references;
 it does not explicitly disconnect the R connection. The protocol is process-local
 and does not make R objects safe to query from background threads.
+
+`duckdb_import_connection(exported)` imports the same protocol from another
+binding as a native `duckdb_connection`. The R driver wraps the original database,
+and DBI, relational operations, and duckplyr use the producer's connection and
+transaction. Import obtains quoting metadata from the native parser without
+executing SQL on the shared session, so an open transaction or pending result is
+preserved. A first foreign import during an active query is refused before
+changing the native session.
+
+R queries keep their ordinary caller-environment lookup, including R data frames
+in `globalenv()`. Direct Python queries keep Python's lookup conventions. Explicitly
+registered views are visible from either binding. Native views retain registered
+R data frames even after the imported R connection is collected; the importing
+view, its statements, relations, and Arrow streams retain the producer as needed.
+The producer's context holds weak references to the R adapter so these lifetimes
+do not form an ownership cycle.
+
+Collecting an imported R view releases that view. Explicit `dbDisconnect()` closes
+the shared session and invalidates its other views; closing the producer also
+invalidates the R connection. `dbConnect(imported@driver)` opens an independent
+native session on the same database, with its own transaction and temporary tables.
+Exporting that clone shares the clone's session. Exporting an imported view forwards
+the original producer's export, and importing an R-produced export returns its
+original R connection, so round trips do not create nested owners.

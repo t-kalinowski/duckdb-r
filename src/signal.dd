@@ -1,4 +1,6 @@
 signal.o: \
+  include/convert.hpp \
+  include/rapi.hpp \
   include/signal.hpp \
   signal.cpp \
   vendor/cpp11.hpp \

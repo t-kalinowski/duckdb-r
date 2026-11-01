@@ -16,6 +16,23 @@ test_that("exporting a connection preserves its transaction and identity", {
   expect_equal(dbGetQuery(con, "SELECT count(*) AS n FROM shared_export")$n, 0)
 })
 
+test_that("importing an R export returns its original native connection", {
+  con <- local_con()
+  exported <- duckdb_export_connection(con)
+  imported <- duckdb_import_connection(exported)
+  expect_identical(imported, con)
+  expect_equal(dbGetQuery(imported, "SELECT 42 AS value")$value, 42L)
+})
+
+test_that("connection import rejects malformed descriptor addresses", {
+  for (address in c("-1", "184467440737095516160", "12 trailing")) {
+    expect_error(
+      duckdb_import_connection(list(address = address, owner = NULL)),
+      "Invalid shared connection descriptor address"
+    )
+  }
+})
+
 test_that("connection export validates its public arguments", {
   con <- dbConnect(duckdb())
   expect_error(duckdb_export_connection(NULL))

@@ -44,3 +44,54 @@ duckdb_export_connection <- function(con, environment = globalenv()) {
   )
   rethrow_rapi_export_connection(con, environment)
 }
+
+#' Import a native connection from another language binding
+#'
+#' `duckdb_import_connection()` presents a compatible foreign native connection
+#' as a regular [duckdb_connection-class], with DBI and relational methods.
+#' Queries share the producer's session and transaction. Importing an R export
+#' returns its original R connection.
+#'
+#' @param exported A native connection export containing `address` and `owner`.
+#'
+#' @return A [duckdb_connection-class] using the exported native connection.
+#' @details Collecting the imported R connection releases that view. Explicit
+#'   [DBI::dbDisconnect()] closes the shared session in both bindings. Native
+#'   builds must be ABI-compatible; import rejects incompatible builds.
+#' @export
+duckdb_import_connection <- function(exported) {
+  stopifnot(
+    is.list(exported),
+    all(c("address", "owner") %in% names(exported)),
+    is.character(exported$address),
+    length(exported$address) == 1L
+  )
+  convert_opts <- duckdb_convert_opts()
+  native <- rethrow_rapi_import_connection(exported, convert_opts)
+  if (!is.null(native[["connection"]])) {
+    return(native[["connection"]])
+  }
+  driver <- new(
+    "duckdb_driver",
+    database_ref = native$database_ref,
+    config = list(),
+    dbdir = native$dbdir,
+    read_only = native$read_only,
+    convert_opts = convert_opts,
+    bigint = convert_opts$bigint,
+    allow_extensions = TRUE
+  )
+  reg.finalizer(driver@database_ref, onexit = TRUE, rapi_shutdown)
+  con <- new(
+    "duckdb_connection",
+    conn_ref = native$connection_ref,
+    driver = driver,
+    debug = FALSE,
+    reserved_words = native$reserved_words,
+    convert_opts = convert_opts,
+    timezone_out = convert_opts$timezone_out,
+    tz_out_convert = convert_opts$tz_out_convert,
+    bigint = convert_opts$bigint
+  )
+  con
+}

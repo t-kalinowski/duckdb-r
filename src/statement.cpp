@@ -82,6 +82,9 @@ void RCallbackScope::Drain() {
 RStatement::~RStatement() {
 	if (stmt) {
 		RCallbackScope::Defer(std::move(stmt));
+		if (database) {
+			RCallbackScope::Defer(std::move(database));
+		}
 	}
 }
 
@@ -98,6 +101,9 @@ RQueryResult::~RQueryResult() {
 		}
 		if (context) {
 			RCallbackScope::Defer(std::move(context));
+		}
+		if (database) {
+			RCallbackScope::Defer(std::move(database));
 		}
 	}
 }
@@ -161,17 +167,16 @@ static cpp11::list construct_retlist(duckdb::unique_ptr<PreparedStatement> stmt,
 }
 
 [[cpp11::register]] cpp11::list rapi_prepare(duckdb::conn_eptr_t conn, std::string query, cpp11::environment env) {
-	RCallbackScope::Drain();
-
 	if (!conn || !conn.get() || !conn->conn) {
 		rapi_error_with_context("rapi_prepare", "Invalid connection");
 	}
-	EndOpenResults(*conn->conn->context);
 
 	// Create ScopedInterruptHandler to prevent deadlock when called re-entrantly
 	// during progress bar callbacks. This will throw "ScopedInterruptHandler already active"
 	// if another query is already executing, providing fast failure instead of deadlock.
 	ScopedInterruptHandler signal_handler(conn->conn->context);
+	RCallbackScope::Drain();
+	EndOpenResults(*conn->conn->context);
 
 	D_ASSERT(conn->db->env == R_NilValue);
 	conn->db->env = (SEXP)env;
@@ -449,10 +454,10 @@ static SEXP rapi_execute_impl(RStatement *stmt, const duckdb::ConvertOpts &conve
 	}
 
 	auto context = stmt->stmt->TryGetContext();
+	ScopedInterruptHandler signal_handler(context);
 	if (context) {
 		EndOpenResults(*context);
 	}
-	ScopedInterruptHandler signal_handler(context);
 
 	// A streamed result is submitted, and runs as it is read. Whether it streams is decided by the statement as
 	// written, because a prepared execution reports the EXECUTE that runs it, as the engine's own ADBC driver does

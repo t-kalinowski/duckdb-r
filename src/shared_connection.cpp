@@ -17,6 +17,7 @@ struct SharedConnectionExport {
 	ConnWrapper *connection;
 	std::shared_ptr<DBWrapper> database;
 	SEXP connection_ref;
+	SEXP original_connection;
 	SEXP environment;
 	SEXP retained;
 	std::string abi = SharedConnectionABI();
@@ -32,9 +33,10 @@ struct SharedConnectionExport {
 	};
 	std::map<uint64_t, Subscriber> subscribers;
 
-	SharedConnectionExport(ConnWrapper *connection_p, SEXP connection_ref_p, SEXP environment_p, SEXP retained_p)
+	SharedConnectionExport(ConnWrapper *connection_p, SEXP connection_ref_p, SEXP original_p, SEXP environment_p,
+	                       SEXP retained_p)
 	    : connection(connection_p), database(connection_p->db), connection_ref(connection_ref_p),
-	      environment(environment_p), retained(retained_p) {
+	      original_connection(original_p), environment(environment_p), retained(retained_p) {
 		api = {DUCKDB_SHARED_CONNECTION_VERSION,
 		       sizeof(duckdb_shared_connection),
 		       abi.c_str(),
@@ -133,6 +135,9 @@ struct SharedConnectionExport {
 	static const char *SubscribeClose(void *context, duckdb_shared_connection_close_callback callback, void *consumer,
 	                                  uint64_t *subscription) {
 		return Try(context, [&](SharedConnectionExport &self) {
+			if (ScopedInterruptHandler::IsActiveFor(*self.connection->conn->context)) {
+				throw std::runtime_error("Cannot import a shared R connection while an operation is running");
+			}
 			std::lock_guard<std::recursive_mutex> lock(self.subscribers_lock);
 			*subscription = ++self.next_subscription;
 			self.subscribers.emplace(*subscription, Subscriber {callback, consumer});
@@ -165,6 +170,14 @@ struct SharedConnectionExport {
 		}
 	}
 };
+
+SEXP OriginalRConnection(void *descriptor) {
+	auto api = static_cast<duckdb_shared_connection *>(descriptor);
+	if (api->get_connection == SharedConnectionExport::GetConnection) {
+		return SharedConnectionExport::Get(api->context).original_connection;
+	}
+	return R_NilValue;
+}
 
 void CloseSharedConnection(ConnWrapper &connection) {
 	std::vector<std::shared_ptr<SharedConnectionExport>> exports;
@@ -207,6 +220,9 @@ void CloseSharedConnection(ConnWrapper &connection) {
 	}
 	for (auto &exported : exports) {
 		exported->connection = nullptr;
+		// Consumers own their database facade. Retaining this one after close
+		// would let a catalog UDF capturing an export keep that catalog alive.
+		exported->database.reset();
 	}
 }
 
@@ -218,9 +234,13 @@ void CloseSharedConnection(ConnWrapper &connection) {
 	if (!native || !native->conn) {
 		cpp11::stop("Cannot export a closed connection");
 	}
+	if (native->borrowed) {
+		return cpp11::list(ExportImportedConnection(*native));
+	}
 	cpp11::sexp retained(Rf_cons(R_NilValue, R_NilValue));
 	cpp11::writable::list protection = {connection, environment, retained};
-	auto exported = std::make_shared<SharedConnectionExport>(native.get(), reference, environment, retained);
+	auto exported =
+	    std::make_shared<SharedConnectionExport>(native.get(), reference, connection, environment, retained);
 	cpp11::external_pointer<std::shared_ptr<SharedConnectionExport>> owner(
 	    new std::shared_ptr<SharedConnectionExport>(exported));
 	R_SetExternalPtrProtected(owner, protection);

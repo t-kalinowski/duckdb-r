@@ -351,3 +351,51 @@ con.execute('CREATE TEMP TABLE shared_duckplyr_values AS SELECT 42 AS value')
   expect_equal(as.data.frame(from_python)$value, 42L)
   dbExecute(con, "DROP TABLE shared_duckplyr_values")
 })
+
+test_that("explicit close releases Python callbacks while the R export remains alive", {
+  python <- shared_python_module()
+  con <- dbConnect(duckdb(shared_home = FALSE))
+  withr::defer(if (dbIsValid(con)) dbDisconnect(con))
+  exported <- duckdb_export_connection(con)
+  scope <- reticulate::dict(
+    duckdb = python,
+    exported = reticulate::r_to_py(exported)
+  )
+  scope$con <- python$from_shared_connection(scope$exported)
+  expect_no_error(shared_python_exec(
+    scope,
+    r"---(
+import gc
+import weakref
+
+def make_callback(view):
+    def callback(value):
+        return value + 1 if view is not None else value
+    return callback
+
+callback = make_callback(con)
+callback_ref = weakref.ref(callback)
+con.create_function('shared_callback_cycle', callback, ['INTEGER'], 'INTEGER')
+del callback
+)---"
+  ))
+  expect_equal(
+    dbGetQuery(con, "SELECT shared_callback_cycle(41) AS value")$value,
+    42L
+  )
+  dbDisconnect(con)
+  expect_type(exported$owner, "externalptr")
+  expect_no_error(shared_python_exec(
+    scope,
+    r"---(
+gc.collect()
+assert callback_ref() is None
+try:
+    duckdb.from_shared_connection(exported)
+except duckdb.ConnectionException:
+    pass
+else:
+    raise AssertionError('a retained descriptor reopened a closed R producer')
+)---"
+  ))
+})

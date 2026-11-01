@@ -67,7 +67,7 @@ static bool CastRstringToVarchar(Vector &source, Vector &result, idx_t count, Ca
 			data2->wrapper = wrapper;
 			config.replacement_scans.emplace_back(EnvironmentScanReplacement, std::move(data2));
 		}
-		wrapper->db = make_uniq<DuckDB>(dbdirchar, &config);
+		wrapper->db = std::make_shared<DuckDB>(dbdirchar, &config);
 
 		auto &instance = *wrapper->db->instance;
 		auto &catalog = Catalog::GetSystemCatalog(instance);
@@ -83,9 +83,17 @@ static bool CastRstringToVarchar(Vector &source, Vector &result, idx_t count, Ca
 	}
 	D_ASSERT(wrapper->db);
 
+	InitializeRDatabase(*wrapper);
+	auto dual = new DBWrapperDual(wrapper_.release());
+	wrapper = nullptr;
+	return db_eptr_t(dual);
+}
+
+void duckdb::InitializeRDatabase(DBWrapper &database) {
 	DataFrameScanFunction scan_fun;
 	CreateTableFunctionInfo info(scan_fun);
-	Connection conn(*wrapper->db);
+	info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
+	Connection conn(*database.db);
 	auto &context = *conn.context;
 	auto &catalog = Catalog::GetSystemCatalog(context);
 	context.transaction.BeginTransaction();
@@ -98,11 +106,6 @@ static bool CastRstringToVarchar(Vector &source, Vector &result, idx_t count, Ca
 	casts.RegisterCastFunction(RStringsType::Get(), LogicalType::VARCHAR, CastRstringToVarchar);
 
 	context.transaction.Commit();
-
-	auto dual = new DBWrapperDual(wrapper_.release());
-	wrapper = nullptr;
-
-	return db_eptr_t(dual);
 }
 
 [[cpp11::register]] bool rapi_lock(duckdb::db_eptr_t dual) {

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <csignal>
+#include <memory>
 
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -19,6 +20,8 @@ namespace duckdb {
 class ScopedInterruptHandler {
 private:
 	shared_ptr<ClientContext> context;
+	std::shared_ptr<void> foreign_operation;
+	bool owns_handler = false;
 
 	// Written by the signal handler and read by HandleInterrupt() outside it,
 	// which is the one round trip the standard only guarantees for a

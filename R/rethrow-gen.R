@@ -576,6 +576,15 @@ rethrow_rapi_export_connection <- function(connection, environment, call = paren
   )
 }
 
+rethrow_rapi_import_connection <- function(exported, convert_opts, call = parent.frame(2)) {
+  rlang::try_fetch(
+    rapi_import_connection(exported, convert_opts),
+    error = function(e) {
+      rethrow_error_from_rapi(e, call)
+    }
+  )
+}
+
 rethrow_rapi_release <- function(stmt, call = parent.frame(2)) {
   rlang::try_fetch(
     rapi_release(stmt),
@@ -722,6 +731,7 @@ rethrow_restore <- function() {
   rethrow_rapi_df_has_query_result <<- rapi_df_has_query_result
   rethrow_rapi_rel_from_altrep_df <<- rapi_rel_from_altrep_df
   rethrow_rapi_export_connection <<- rapi_export_connection
+  rethrow_rapi_import_connection <<- rapi_import_connection
   rethrow_rapi_release <<- rapi_release
   rethrow_rapi_prepare <<- rapi_prepare
   rethrow_rapi_bind <<- rapi_bind

@@ -3,6 +3,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "r_progress_bar_display.hpp"
 #include "rapi.hpp"
+#include "signal.hpp"
 
 #include <mutex>
 #include <vector>
@@ -14,8 +15,16 @@
 using namespace duckdb;
 
 void duckdb::ConnDeleter(ConnWrapper *conn) {
-	cpp11::warning("Connection is garbage-collected, use dbDisconnect() to avoid this.");
+	if (!conn->borrowed) {
+		cpp11::warning("Connection is garbage-collected, use dbDisconnect() to avoid this.");
+	}
 	delete conn;
+}
+
+ConnWrapper::~ConnWrapper() {
+	if (borrowed) {
+		DetachImportedConnection(*this);
+	}
 }
 
 // Displays and frame dependencies can be destroyed off R's thread. The next
@@ -118,6 +127,9 @@ static void SetDefaultConfigArguments(ClientContext &context) {
 	}
 
 	auto conn_wrapper = make_uniq<ConnWrapper>(std::move(db), std::move(convert_opts));
+	if (conn_wrapper->db->imported_owner) {
+		SetupImportedContext(conn_wrapper->db, *conn_wrapper->conn, false);
+	}
 
 	// Set progress display config
 	auto &client_context = *conn_wrapper->conn->context;
@@ -137,7 +149,11 @@ static void SetDefaultConfigArguments(ClientContext &context) {
 	if (conn_wrapper) {
 		// A foreign view can refuse a close while it is executing. Keep the R
 		// pointer valid until all views have released their pending results.
-		CloseSharedConnection(*conn_wrapper);
+		if (conn_wrapper->borrowed) {
+			CloseImportedConnection(*conn_wrapper);
+		} else {
+			CloseSharedConnection(*conn_wrapper);
+		}
 		conn.release();
 		delete conn_wrapper;
 	}
@@ -149,6 +165,7 @@ static void SetDefaultConfigArguments(ClientContext &context) {
 	if (!conn || !conn.get() || !conn->conn) {
 		rapi_error_with_context("rapi_connection_in_transaction", "Invalid connection");
 	}
+	ScopedInterruptHandler signal_handler(conn->conn->context);
 	return !conn->conn->IsAutoCommit();
 }
 
@@ -160,6 +177,7 @@ static void SetDefaultConfigArguments(ClientContext &context) {
 	if (!conn || !conn.get() || !conn->conn) {
 		rapi_error_with_context("rapi_connection_set_invalidation_policy", "Invalid connection");
 	}
+	ScopedInterruptHandler signal_handler(conn->conn->context);
 	auto &transaction = conn->conn->context->transaction;
 	auto previous = EnumUtil::ToString(transaction.GetInvalidationPolicy());
 	transaction.SetInvalidationPolicy(EnumUtil::FromString<TransactionInvalidationPolicy>(policy));

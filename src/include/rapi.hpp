@@ -115,9 +115,11 @@ private:
 namespace duckdb {
 
 typedef unordered_map<std::string, cpp11::list> arrow_scans_t;
+struct ImportedConnection;
 
 struct DBWrapper {
-	duckdb::unique_ptr<DuckDB> db;
+	std::shared_ptr<DuckDB> db;
+	std::shared_ptr<ImportedConnection> imported_owner;
 	arrow_scans_t arrow_scans;
 	mutex lock;
 	cpp11::sexp env;
@@ -194,16 +196,32 @@ struct ConnWrapper {
 	ConnWrapper() = delete;
 	ConnWrapper(std::shared_ptr<DBWrapper> db_p, ConvertOpts convert_opts_p)
 	    : db(std::move(db_p)), convert_opts(std::move(convert_opts_p)) {
-		conn = make_uniq<Connection>(*db->db);
+		conn = std::make_shared<Connection>(*db->db);
 	}
+	ConnWrapper(std::shared_ptr<DBWrapper> db_p, Connection *connection, ConvertOpts convert_opts_p)
+	    : db(std::move(db_p)), conn(connection, [](Connection *) {}), convert_opts(std::move(convert_opts_p)),
+	      borrowed(true), imported_owner(db->imported_owner) {
+	}
+	~ConnWrapper();
 	std::shared_ptr<DBWrapper> db;
-	duckdb::unique_ptr<Connection> conn;
+	std::shared_ptr<Connection> conn;
 	const ConvertOpts convert_opts;
+	bool borrowed = false;
+	std::shared_ptr<ImportedConnection> imported_owner;
 	std::vector<std::weak_ptr<SharedConnectionExport>> shared_exports;
 };
 
 //! Notify imported views before native destruction, while no engine lock is held.
 void CloseSharedConnection(ConnWrapper &connection);
+void InitializeRDatabase(DBWrapper &database);
+shared_ptr<Relation> MakeRDataFrameRelation(Connection &connection, SEXP frame, named_parameter_map_t parameters);
+void SetupImportedContext(const std::shared_ptr<DBWrapper> &database, Connection &connection, bool borrowed);
+std::shared_ptr<DBWrapper> GetImportedDatabase(const shared_ptr<ClientContext> &context);
+std::shared_ptr<void> BeginImportedOperation(const shared_ptr<ClientContext> &context);
+void DetachImportedConnection(ConnWrapper &connection);
+void CloseImportedConnection(ConnWrapper &connection);
+SEXP ExportImportedConnection(ConnWrapper &connection);
+SEXP OriginalRConnection(void *descriptor);
 void ConnDeleter(ConnWrapper *);
 typedef cpp11::external_pointer<ConnWrapper, ConnDeleter> conn_eptr_t;
 
@@ -260,9 +278,11 @@ void DrainRObjectReleases();
 
 struct RStatement {
 	RStatement() = delete;
-	explicit RStatement(duckdb::unique_ptr<PreparedStatement> stmt_p) : stmt(std::move(stmt_p)) {
+	explicit RStatement(duckdb::unique_ptr<PreparedStatement> stmt_p)
+	    : database(GetImportedDatabase(stmt_p->TryGetContext())), stmt(std::move(stmt_p)) {
 	}
 	~RStatement();
+	std::shared_ptr<DBWrapper> database;
 	duckdb::unique_ptr<PreparedStatement> stmt;
 	vector<Value> parameters;
 };
@@ -272,8 +292,10 @@ typedef cpp11::external_pointer<RStatement> stmt_eptr_t;
 struct RelationWrapper {
 	RelationWrapper() = delete;
 	RelationWrapper(duckdb::shared_ptr<Relation> rel_p, ConvertOpts convert_opts_)
-	    : rel(std::move(rel_p)), convert_opts(std::move(convert_opts_)) {
+	    : database(GetImportedDatabase(rel_p->context->GetContext())), rel(std::move(rel_p)),
+	      convert_opts(std::move(convert_opts_)) {
 	}
+	std::shared_ptr<DBWrapper> database;
 	duckdb::shared_ptr<Relation> rel;
 	const ConvertOpts convert_opts;
 };
@@ -379,6 +401,7 @@ struct RArrowArrayStreamWrapper {
 	// The engine's callbacks read the result's client context through a raw pointer,
 	// which a streaming result lets go of once it has seen its end, and a disconnect frees.
 	// Declared before `engine`, so the context outlives it.
+	std::shared_ptr<DBWrapper> database;
 	duckdb::shared_ptr<ClientContext> context;
 	RResultArrowStream engine;
 	ErrorData last_error;
@@ -401,8 +424,9 @@ private:
 struct RQueryResult : public ROpenResult {
 	// A streamed result holds its connection's query open from here on, so it is tracked until it is handed on
 	RQueryResult(duckdb::shared_ptr<ClientContext> context_p, duckdb::unique_ptr<QueryResult> result_p, bool streamed)
-	    : context(std::move(context_p)), result(std::move(result_p)), types(result->GetTypes()),
-	      names(IdentifiersToStrings(result->GetNames())), client_properties(result->client_properties) {
+	    : database(GetImportedDatabase(context_p)), context(std::move(context_p)), result(std::move(result_p)),
+	      types(result->GetTypes()), names(IdentifiersToStrings(result->GetNames())),
+	      client_properties(result->client_properties) {
 		if (streamed && context) {
 			Track(context.get());
 		}
@@ -418,6 +442,7 @@ struct RQueryResult : public ROpenResult {
 	}
 
 	// Declared first, so the context outlives everything that reads it.
+	std::shared_ptr<DBWrapper> database;
 	duckdb::shared_ptr<ClientContext> context;
 	duckdb::unique_ptr<QueryResult> result;
 	duckdb::unique_ptr<RArrowArrayStreamWrapper> stream_wrapper;

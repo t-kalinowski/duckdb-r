@@ -3,6 +3,7 @@
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/function/table/arrow.hpp"
 #include "duckdb/main/external_dependencies.hpp"
+#include "duckdb/main/relation/table_function_relation.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
@@ -31,6 +32,41 @@
 
 using namespace duckdb;
 
+class RFrameDependency : public DependencyItem {
+public:
+	explicit RFrameDependency(SEXP frame_p) : frame(frame_p) {
+		R_PreserveObject(frame);
+	}
+	~RFrameDependency() override {
+		ReleasePreservedRObject(frame);
+	}
+
+private:
+	SEXP frame;
+};
+
+class RegisteredRFrameRelation : public TableFunctionRelation {
+public:
+	RegisteredRFrameRelation(const shared_ptr<ClientContext> &context, SEXP frame, named_parameter_map_t parameters)
+	    : TableFunctionRelation(context, "r_dataframe_scan", {Value::POINTER((uintptr_t)frame)}, std::move(parameters)),
+	      dependency(make_shared_ptr<ExternalDependency>()) {
+		dependency->AddDependency("r_dataframe", make_shared_ptr<RFrameDependency>(frame));
+	}
+	unique_ptr<TableRef> GetTableRef() override {
+		auto table = TableFunctionRelation::GetTableRef();
+		table->external_dependency = dependency;
+		return table;
+	}
+
+private:
+	shared_ptr<ExternalDependency> dependency;
+};
+
+shared_ptr<Relation> duckdb::MakeRDataFrameRelation(Connection &connection, SEXP frame,
+                                                    named_parameter_map_t parameters) {
+	return make_shared_ptr<RegisteredRFrameRelation>(connection.context, frame, std::move(parameters));
+}
+
 [[cpp11::register]] void rapi_register_df(duckdb::conn_eptr_t conn, std::string name, cpp11::data_frame value,
                                           duckdb::ConvertOpts convert_opts, bool overwrite) {
 	if (!conn || !conn.get() || !conn->conn) {
@@ -43,8 +79,8 @@ using namespace duckdb;
 		rapi_error_with_context("rapi_register_df", "Data frame with at least one column required");
 	}
 
-	EndOpenResults(*conn->conn->context);
 	ScopedInterruptHandler signal_handler(conn->conn->context);
+	EndOpenResults(*conn->conn->context);
 
 	try {
 		named_parameter_map_t parameter_map;
@@ -55,7 +91,7 @@ using namespace duckdb;
 		    Value::BOOLEAN(convert_opts.experimental == ConvertOpts::ExperimentalFeatures::ENABLED);
 		parameter_map["map_list_of"] = Value::BOOLEAN(convert_opts.map == ConvertOpts::MapShape::LIST_OF);
 
-		conn->conn->TableFunction("r_dataframe_scan", {Value::POINTER((uintptr_t)value.data())}, parameter_map)
+		MakeRDataFrameRelation(*conn->conn, value.data(), std::move(parameter_map))
 		    ->CreateView(Identifier(name), overwrite, true);
 
 		signal_handler.HandleInterrupt();
@@ -71,8 +107,8 @@ using namespace duckdb;
 		return;
 	}
 
-	EndOpenResults(*conn->conn->context);
 	ScopedInterruptHandler signal_handler(conn->conn->context);
+	EndOpenResults(*conn->conn->context);
 
 	static_cast<cpp11::sexp>(conn).attr("_registered_df_" + name) = R_NilValue;
 	auto res = conn->conn->Query("DROP VIEW IF EXISTS \"" + name + "\"");
@@ -83,19 +119,6 @@ using namespace duckdb;
 		rapi_error_with_context("rapi_unregister_df", res->GetErrorObject());
 	}
 }
-
-class RFrameDependency : public DependencyItem {
-public:
-	explicit RFrameDependency(SEXP frame_p) : frame(frame_p) {
-		R_PreserveObject(frame);
-	}
-	~RFrameDependency() override {
-		ReleasePreservedRObject(frame);
-	}
-
-private:
-	SEXP frame;
-};
 
 unique_ptr<TableRef> duckdb::EnvironmentScanReplacement(ClientContext &context, ReplacementScanInput &input,
                                                         optional_ptr<ReplacementScanData> data_p) {
